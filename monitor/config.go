@@ -228,7 +228,7 @@ func validateAlertLevel(level string, alertLevel AlertLevel) error {
 		if actionType, ok := action["type"]; !ok {
 			return fmt.Errorf("alert action %d for level '%s' missing 'type' field", i, level)
 		} else if actionTypeStr, ok := actionType.(string); ok {
-			validTypes := map[string]bool{"logger": true, "syslog": true, "webhook": true, "script": true}
+			validTypes := map[string]bool{"logger": true, "syslog": true, "webhook": true, "script": true, "stdout": true}
 			if !validTypes[actionTypeStr] {
 				return fmt.Errorf("alert action type '%s' not supported", actionTypeStr)
 			}

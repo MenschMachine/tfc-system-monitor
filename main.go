@@ -46,7 +46,6 @@ func (s *Status) AddCritical(category string, msg string) {
 var (
 	cliMode    = flag.Bool("cli", false, "Run in command line mode")
 	configPath = flag.String("config", "config.yaml", "Path to config file")
-	useAlerts  = flag.Bool("alert", false, "Execute configured alert actions")
 	debugMode  = flag.Bool("debug", false, "Enable debug logging")
 	port       = flag.Int("port", 12349, "Port for HTTP server")
 )
@@ -81,17 +80,9 @@ func runCLI() {
 	stateManager := monitor.NewStateManager()
 	status := checkSystemStatus(config, stateManager)
 
-	if *useAlerts {
-		// Extract violations for alert processing
-		stats, err := monitor.GetSystemStats()
-		if err != nil {
-			log.Fatalf("Failed to get system stats: %v", err)
-		}
-		warningViolations, criticalViolations := monitor.CheckAllThresholds(config, stats, stateManager)
-		monitor.ProcessViolations(config, warningViolations, criticalViolations)
+	if *debugMode {
+		fmt.Println(status.ToJSON())
 	}
-
-	fmt.Println(status.ToJSON())
 }
 
 // runServer runs the monitor as an HTTP server
@@ -164,10 +155,8 @@ func checkSystemStatus(config *monitor.Config, stateManager *monitor.StateManage
 		status.AddWarning(violation.Metric, violation.Message)
 	}
 
-	// Process alerts if enabled
-	if *useAlerts {
-		monitor.ProcessViolations(config, warningViolations, criticalViolations)
-	}
+	// Process violations (alerts)
+	monitor.ProcessViolations(config, warningViolations, criticalViolations)
 
 	return status
 }
