@@ -13,6 +13,18 @@ metrics:
       min_duration_minutes: 0    # Alert immediately
       repeat: false              # Only alert once per violation
     unit: percentage
+    # Exclude specific disks/mountpoints from monitoring
+    exclude:
+      devices:         # Device patterns to exclude (glob patterns)
+        - "/dev/loop*"
+        - "/dev/cd*"
+      filesystems:     # Filesystem types to exclude
+        - "tmpfs"
+        - "devfs"
+      mountpoints:     # Mountpoint patterns to exclude (glob patterns)
+        - "/dev*"
+        - "/sys/*"
+        - "/proc/*"
 
   # CPU usage monitoring
   cpu:

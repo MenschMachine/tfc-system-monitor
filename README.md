@@ -198,6 +198,36 @@ metrics:
   - `"10s"` - 10 seconds
   - Leave empty to repeat continuously
 
+#### Disk Exclusions
+
+The disk metric supports excluding specific devices, filesystem types, or mountpoints:
+
+```yaml
+metrics:
+  disk:
+    enabled: true
+    thresholds:
+      warning: 80
+      critical: 90
+    exclude:
+      devices:       # Device patterns (glob patterns)
+        - "/dev/loop*"
+        - "/dev/cd*"
+      filesystems:   # Filesystem types
+        - "tmpfs"
+        - "devfs"
+        - "iso9660"
+      mountpoints:   # Mountpoint patterns (glob patterns)
+        - "/dev*"
+        - "/sys/*"
+        - "/proc/*"
+```
+
+Common exclusions:
+- **Devices**: `/dev/loop*` (loop devices), `/dev/cd*` (CD/DVD drives)
+- **Filesystems**: `tmpfs` (temporary), `devfs` (device filesystem), `iso9660` (CD/DVD)
+- **Mountpoints**: `/dev*`, `/sys/*`, `/proc/*` (virtual filesystems)
+
 #### Memory Mode
 
 The memory metric supports two modes:

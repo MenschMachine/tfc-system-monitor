@@ -14,6 +14,13 @@ type Config struct {
 	Alerts  map[string]AlertLevel   `yaml:"alerts"`
 }
 
+// ExcludeConfig represents exclusion settings for metrics (e.g., disk)
+type ExcludeConfig struct {
+	Devices     []string `yaml:"devices"`      // Device patterns to exclude (e.g., "/dev/loop*", "/dev/cd*")
+	Filesystems []string `yaml:"filesystems"` // Filesystem types to exclude (e.g., "tmpfs", "devfs")
+	Mountpoints []string `yaml:"mountpoints"` // Mountpoint patterns to exclude (e.g., "/sys/*", "/proc/*")
+}
+
 // MetricConfig represents configuration for a single metric
 type MetricConfig struct {
 	Enabled    bool              `yaml:"enabled"`
@@ -21,6 +28,7 @@ type MetricConfig struct {
 	Throttle   ThrottleConfig    `yaml:"throttle"`
 	Mode       string            `yaml:"mode"` // for memory metric
 	Unit       string            `yaml:"unit"`
+	Exclude    ExcludeConfig     `yaml:"exclude"` // for disk metric
 }
 
 // ThrottleConfig represents throttle settings

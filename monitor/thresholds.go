@@ -3,6 +3,7 @@ package monitor
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"strconv"
 )
 
@@ -66,6 +67,45 @@ func CheckAllThresholds(config *Config, stats *SystemStats, stateManager *StateM
 	return warningViolations, criticalViolations
 }
 
+// matchesPattern checks if a string matches a glob pattern
+func matchesPattern(pattern, text string) bool {
+	matched, err := filepath.Match(pattern, text)
+	if err != nil {
+		return false
+	}
+	return matched
+}
+
+// isPartitionExcludedByConfig checks if a partition should be excluded based on config
+func isPartitionExcludedByConfig(partition PartitionInfo, exclude ExcludeConfig) bool {
+	// Check device patterns
+	for _, pattern := range exclude.Devices {
+		if matchesPattern(pattern, partition.Device) {
+			log.Printf("Excluding partition %s (matches device pattern: %s)", partition.Device, pattern)
+			return true
+		}
+	}
+
+	// Check filesystem types
+	for _, fsType := range exclude.Filesystems {
+		if partition.FSType == fsType {
+			log.Printf("Excluding partition %s (filesystem type: %s)", partition.Device, fsType)
+			return true
+		}
+	}
+
+	// Check mountpoint patterns
+	for _, pattern := range exclude.Mountpoints {
+		if matchesPattern(pattern, partition.Mountpoint) {
+			log.Printf("Excluding partition %s mounted at %s (matches mountpoint pattern: %s)",
+				partition.Device, partition.Mountpoint, pattern)
+			return true
+		}
+	}
+
+	return false
+}
+
 // checkDiskThresholds checks disk usage against configured thresholds
 func checkDiskThresholds(config *Config, stats *SystemStats) []ThresholdViolation {
 	var violations []ThresholdViolation
@@ -78,8 +118,14 @@ func checkDiskThresholds(config *Config, stats *SystemStats) []ThresholdViolatio
 	thresholds := metricConfig.Thresholds
 	warningThreshold := thresholds["warning"]
 	criticalThreshold := thresholds["critical"]
+	exclude := metricConfig.Exclude
 
 	for _, partition := range stats.DiskInfo.Partitions {
+		// Check if partition should be excluded
+		if isPartitionExcludedByConfig(partition, exclude) {
+			continue
+		}
+
 		percentage, err := strconv.ParseFloat(partition.Percentage, 64)
 		if err != nil {
 			log.Printf("Error parsing disk percentage: %v", err)
