@@ -24,42 +24,48 @@ A complete Go port of the Python tfc-system-monitor application. Monitors system
 ## Installation
 
 ### Requirements
-- Go 1.21 or later (for building from source)
+- Go 1.21 or later
 - On Linux: standard system utilities (logger, syslog support)
+
+### Quick Install (via Go Package Manager)
+
+```bash
+go install github.com/MenschMachine/tfc-system-monitor@latest
+```
+
+Then run with:
+```bash
+tfc-system-monitor -h          # Show help
+tfc-system-monitor -cli        # Check system status once
+tfc-system-monitor             # Run as HTTP server
+```
 
 ### Build from Source
 
 ```bash
-cd tfc-system-monitor-go
+git clone https://github.com/MenschMachine/tfc-system-monitor.git
+cd tfc-system-monitor
 go mod tidy
-./build.sh
-```
-
-Or manually:
-```bash
 go build -o tfc-system-monitor
 ```
 
-### Linux System Installation
+### Linux System Installation (Production)
 
-Follow these steps to install on a Linux system for production use:
+#### 1. Install Binary
 
-#### 1. Build the Binary
-
+Using Go package manager (recommended):
 ```bash
-# On your build machine
-./build.sh
+go install github.com/MenschMachine/tfc-system-monitor@latest
+# Binary installed to ~/go/bin/tfc-system-monitor
 ```
 
-#### 2. Install Binary
-
+Or copy built binary:
 ```bash
-# Copy to system path
 sudo cp tfc-system-monitor /usr/local/bin/
 sudo chmod +x /usr/local/bin/tfc-system-monitor
 ```
 
-#### 3. Create Config Directory
+#### 2. Create Config Directory
 
 ```bash
 sudo mkdir -p /etc/tfc-monitor
@@ -67,11 +73,11 @@ sudo cp config-example.yaml /etc/tfc-monitor/config.yaml
 sudo chmod 644 /etc/tfc-monitor/config.yaml
 ```
 
-#### 4. Configure Monitoring
+#### 3. Configure Monitoring
 
-Edit `/etc/tfc-monitor/config.yaml` with your alert thresholds and actions.
+Edit `/etc/tfc-monitor/config.yaml` with your alert thresholds and actions. See [config-example.yaml](config-example.yaml) for all options.
 
-#### 5. Set Up as Cron Job (Recommended for CLI Mode)
+#### 4. Set Up as Cron Job (CLI Mode)
 
 For periodic checks every 5 minutes:
 
@@ -111,11 +117,11 @@ sudo systemctl start tfc-monitor
 sudo systemctl status tfc-monitor
 ```
 
-#### 6. Verify Installation
+#### 5. Verify Installation
 
 ```bash
 # Test CLI mode
-/usr/local/bin/tfc-system-monitor -cli -config /etc/tfc-monitor/config.yaml -debug
+tfc-system-monitor -cli -config /etc/tfc-monitor/config.yaml -debug
 
 # Test server mode
 curl http://localhost:12349/
