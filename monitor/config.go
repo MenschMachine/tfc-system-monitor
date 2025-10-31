@@ -127,13 +127,16 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// First, validate that the YAML only contains known fields
 	if err := validateYAMLStructure(data); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 		return nil, err
 	}
 
 	// Parse user config
 	userConfig := &Config{}
 	if err := yaml.Unmarshal(data, userConfig); err != nil {
-		return nil, fmt.Errorf("error parsing config file: %w", err)
+		err = fmt.Errorf("error parsing config file: %w", err)
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		return nil, err
 	}
 
 	// Merge user config with defaults
@@ -141,7 +144,9 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	// Validate config
 	if err := validateConfig(config); err != nil {
-		return nil, fmt.Errorf("config validation failed: %w", err)
+		err = fmt.Errorf("config validation failed: %w", err)
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		return nil, err
 	}
 
 	log.Println("Config loaded and validated successfully")
