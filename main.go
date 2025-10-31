@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/tfc/system-monitor/monitor"
 )
@@ -48,6 +49,8 @@ var (
 	configPath = flag.String("config", "config.yaml", "Path to config file")
 	debugMode  = flag.Bool("debug", false, "Enable debug logging")
 	port       = flag.Int("port", 12349, "Port for HTTP server")
+	reportMode = flag.Bool("report", false, "Generate report and exit")
+	rrdPath    = flag.String("rrd-path", "./rrd-data", "Path to RRD data directory")
 )
 
 func main() {
@@ -61,13 +64,31 @@ func main() {
 		log.SetOutput(io.Discard)
 	}
 
-	if *cliMode {
+	if *reportMode {
+		// Run in report mode
+		runReport()
+	} else if *cliMode {
 		// Run in CLI mode
 		runCLI()
 	} else {
 		// Run in server mode
 		runServer()
 	}
+}
+
+// runReport generates a report from RRD data and exits
+func runReport() {
+	config, err := monitor.LoadConfig(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	reporter := monitor.NewReporter(*rrdPath, config, fmt.Sprintf("./reports/report-%s.html", time.Now().Format("2006-01-02")))
+	if err := reporter.Generate(); err != nil {
+		log.Fatalf("Failed to generate report: %v", err)
+	}
+
+	fmt.Printf("Report generated successfully: %s\n", reporter.OutputPath)
 }
 
 // runCLI runs the monitor in command-line mode
@@ -77,8 +98,13 @@ func runCLI() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	recorder := monitor.NewRecorder(*rrdPath)
+	if err := recorder.Initialize(); err != nil {
+		log.Fatalf("Failed to initialize recorder: %v", err)
+	}
+
 	stateManager := monitor.NewStateManager()
-	status := checkSystemStatus(config, stateManager)
+	status := checkSystemStatus(config, stateManager, recorder)
 
 	if *debugMode {
 		fmt.Println(status.ToJSON())
@@ -92,11 +118,16 @@ func runServer() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	recorder := monitor.NewRecorder(*rrdPath)
+	if err := recorder.Initialize(); err != nil {
+		log.Fatalf("Failed to initialize recorder: %v", err)
+	}
+
 	stateManager := monitor.NewStateManager()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("GET %s from %s", r.RequestURI, r.RemoteAddr)
-		status := checkSystemStatus(config, stateManager)
+		status := checkSystemStatus(config, stateManager, recorder)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(status.ToJSON()))
@@ -133,7 +164,7 @@ func runServer() {
 }
 
 // checkSystemStatus checks system status and returns a Status object
-func checkSystemStatus(config *monitor.Config, stateManager *monitor.StateManager) *Status {
+func checkSystemStatus(config *monitor.Config, stateManager *monitor.StateManager, recorder *monitor.Recorder) *Status {
 	status := &Status{Status: "OK", Info: []string{}}
 
 	// Get system statistics
@@ -141,6 +172,13 @@ func checkSystemStatus(config *monitor.Config, stateManager *monitor.StateManage
 	if err != nil {
 		status.AddCritical("system", fmt.Sprintf("Failed to get system stats: %v", err))
 		return status
+	}
+
+	// Record metrics to RRD
+	if recorder != nil {
+		if err := recorder.Record(stats); err != nil {
+			log.Printf("Error recording metrics: %v", err)
+		}
 	}
 
 	// Check thresholds

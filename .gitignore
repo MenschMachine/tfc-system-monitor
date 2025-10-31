@@ -2,3 +2,5 @@ config.yaml
 /.idea
 /tfc-system-monitor
 .aider*
+/rrd-data
+/reports

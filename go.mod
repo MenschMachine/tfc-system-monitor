@@ -4,6 +4,7 @@ go 1.25.3
 
 require (
 	github.com/shirou/gopsutil/v3 v3.24.5
+	github.com/ziutek/rrd v0.0.4
 	gopkg.in/yaml.v2 v2.4.0
 )
 
