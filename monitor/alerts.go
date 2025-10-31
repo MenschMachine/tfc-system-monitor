@@ -194,6 +194,17 @@ func (wa *WebhookAction) Execute(violation ThresholdViolation) error {
 	return fmt.Errorf("failed to send webhook alert after %d attempts: %w", wa.Retry, lastError)
 }
 
+// StdoutAction prints alerts to stdout
+type StdoutAction struct{}
+
+// Execute prints alert to stdout
+func (sa *StdoutAction) Execute(violation ThresholdViolation) error {
+	message := fmt.Sprintf("[%s] %s: %s", strings.ToUpper(violation.Level), violation.Metric, violation.Message)
+	fmt.Println(message)
+	log.Printf("Stdout alert sent: %s", message)
+	return nil
+}
+
 // ScriptAction executes external script for alert
 type ScriptAction struct {
 	Path    string
@@ -277,6 +288,8 @@ func CreateAction(config map[string]interface{}) (AlertAction, error) {
 		return NewWebhookAction(config)
 	case "script":
 		return NewScriptAction(config)
+	case "stdout":
+		return &StdoutAction{}, nil
 	default:
 		return nil, fmt.Errorf("unknown alert action type: %s", actionType)
 	}
