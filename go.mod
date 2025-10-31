@@ -1,4 +1,4 @@
-module github.com/tfc/system-monitor
+module github.com/MenschMachine/tfc-system-monitor
 
 go 1.25.3
 

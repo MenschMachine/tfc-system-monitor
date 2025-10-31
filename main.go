@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tfc/system-monitor/monitor"
+	"github.com/MenschMachine/tfc-system-monitor/monitor"
 )
 
 // Status represents the overall system status response
@@ -45,16 +45,102 @@ func (s *Status) AddCritical(category string, msg string) {
 }
 
 var (
-	cliMode    = flag.Bool("cli", false, "Run in command line mode")
-	configPath = flag.String("config", "config.yaml", "Path to config file")
-	debugMode  = flag.Bool("debug", false, "Enable debug logging")
-	port       = flag.Int("port", 12349, "Port for HTTP server")
-	reportMode = flag.Bool("report", false, "Generate report and exit")
-	rrdPath    = flag.String("rrd-path", "./rrd-data", "Path to RRD data directory")
+	cliMode    = flag.Bool("cli", false, "")
+	configPath = flag.String("config", "config.yaml", "")
+	debugMode  = flag.Bool("debug", false, "")
+	port       = flag.Int("port", 12349, "")
+	reportMode = flag.Bool("report", false, "")
+	rrdPath    = flag.String("rrd-path", "./rrd-data", "")
 )
 
+func printHelp() {
+	fmt.Fprintf(flag.CommandLine.Output(), `TFC System Monitor - Monitor system resources and generate alerts
+
+USAGE:
+  tfc-system-monitor [OPTIONS]
+
+FLAGS:
+  -cli
+      Run in command-line mode. Checks system status once and exits.
+      Useful for cron jobs or one-time checks.
+
+  -config string
+      Path to YAML configuration file (default: "config.yaml")
+      Defines thresholds, alert actions, and monitoring settings.
+      See example: https://github.com/MenschMachine/tfc-system-monitor/blob/main/config-example.yaml
+
+  -debug
+      Enable debug logging. Shows detailed log output including file names and line numbers.
+      Useful for troubleshooting issues.
+
+  -port int
+      Port for HTTP server (default: 12349)
+      Only used when running in server mode (default).
+      The server exposes endpoints: / (status) and /health
+
+  -report
+      Generate an HTML report from collected RRD data and exit.
+      Creates a timestamped report file in the ./reports directory.
+
+  -rrd-path string
+      Path to RRD (Round-Robin Database) data directory (default: "./rrd-data")
+      Where historical metrics are stored. Directory will be created if it doesn't exist.
+
+  -h, -help
+      Show this help message
+
+MODES:
+  Server Mode (default)
+    Runs as an HTTP server on the specified port.
+    Continuously monitors system metrics and responds to HTTP requests.
+    Use for long-running monitoring with external polling.
+
+  CLI Mode (-cli flag)
+    Single check mode. Useful for integration with cron, alerting systems, or scripts.
+
+  Report Mode (-report flag)
+    Generates an HTML report from historical RRD data.
+    Requires prior data collection in server or CLI mode.
+
+DOCUMENTATION:
+  README:        https://github.com/MenschMachine/tfc-system-monitor/blob/main/README.md
+  Config Example: https://github.com/MenschMachine/tfc-system-monitor/blob/main/config-example.yaml
+
+INSTALLATION:
+  go install github.com/MenschMachine/tfc-system-monitor@latest
+
+EXAMPLES:
+  # Start server on default port (12349)
+  tfc-system-monitor
+
+  # Start server on custom port
+  tfc-system-monitor -port 8080
+
+  # Check system status once and exit
+  tfc-system-monitor -cli
+
+  # Enable debug logging
+  tfc-system-monitor -debug
+
+  # Use custom config file
+  tfc-system-monitor -config /etc/monitor/config.yaml
+
+  # Generate report from collected data
+  tfc-system-monitor -report
+`)
+}
+
 func main() {
+	flag.Usage = printHelp
 	flag.Parse()
+
+	// Handle explicit -help or -h
+	if flag.NFlag() == 0 && len(os.Args) == 1 {
+		// No args provided, run normally
+	} else if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "-help" || os.Args[1] == "--help") {
+		printHelp()
+		os.Exit(0)
+	}
 
 	// Configure logging
 	if *debugMode {
