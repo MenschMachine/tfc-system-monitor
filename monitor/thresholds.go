@@ -16,37 +16,43 @@ type ThresholdViolation struct {
 }
 
 // CheckAllThresholds checks all metrics against configured thresholds with throttling
-func CheckAllThresholds(config *Config, stats *SystemStats, stateManager *StateManager) ([]ThresholdViolation, []ThresholdViolation) {
+func CheckAllThresholds(config *Config, stats *SystemStats, stateManager *StateManager) ([]ThresholdViolation, []ThresholdViolation, error) {
 	var allViolations []ThresholdViolation
 
 	// Check disk thresholds
-	diskViolations := checkDiskThresholds(config, stats)
+	diskViolations, err := checkDiskThresholds(config, stats)
+	if err != nil {
+		return nil, nil, fmt.Errorf("disk threshold evaluation failed: %w", err)
+	}
 	allViolations = append(allViolations, diskViolations...)
 
 	// Check CPU thresholds
 	cpuUsage, err := strconv.ParseFloat(stats.CPUInfo.TotalCPUUsage, 64)
-	if err == nil {
-		cpuViolations := checkCPUThresholds(config, cpuUsage)
-		allViolations = append(allViolations, cpuViolations...)
-	} else {
-		log.Printf("Error parsing CPU usage: %v", err)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse CPU usage: %w", err)
 	}
+	cpuViolations := checkCPUThresholds(config, cpuUsage)
+	allViolations = append(allViolations, cpuViolations...)
 
 	// Check memory thresholds
 	memUsed, err := strconv.ParseFloat(stats.MemoryInfo.VirtualMemory.Percentage, 64)
-	if err == nil {
-		memFree := 100 - memUsed
-		memViolations := checkMemoryThresholds(config, memUsed, memFree)
-		allViolations = append(allViolations, memViolations...)
-	} else {
-		log.Printf("Error parsing memory usage: %v", err)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to parse memory usage: %w", err)
 	}
+	memFree := 100 - memUsed
+	memViolations := checkMemoryThresholds(config, memUsed, memFree)
+	allViolations = append(allViolations, memViolations...)
 
 	// Apply throttling
-	throttledViolations := applyThrottling(config, allViolations, stateManager)
+	throttledViolations, err := applyThrottling(config, allViolations, stateManager)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to apply throttling: %w", err)
+	}
 
 	// Clear resolved violations
-	clearResolvedViolations(allViolations, stateManager)
+	if err := clearResolvedViolations(allViolations, stateManager); err != nil {
+		return nil, nil, fmt.Errorf("failed to clear resolved violations: %w", err)
+	}
 
 	// Separate by level
 	var warningViolations, criticalViolations []ThresholdViolation
@@ -62,9 +68,11 @@ func CheckAllThresholds(config *Config, stats *SystemStats, stateManager *StateM
 		len(warningViolations), len(criticalViolations), len(allViolations))
 
 	// Save state
-	stateManager.Save()
+	if err := stateManager.Save(); err != nil {
+		return nil, nil, fmt.Errorf("failed to save state: %w", err)
+	}
 
-	return warningViolations, criticalViolations
+	return warningViolations, criticalViolations, nil
 }
 
 // matchesPattern checks if a string matches a glob pattern
@@ -107,12 +115,12 @@ func isPartitionExcludedByConfig(partition PartitionInfo, exclude ExcludeConfig)
 }
 
 // checkDiskThresholds checks disk usage against configured thresholds
-func checkDiskThresholds(config *Config, stats *SystemStats) []ThresholdViolation {
+func checkDiskThresholds(config *Config, stats *SystemStats) ([]ThresholdViolation, error) {
 	var violations []ThresholdViolation
 
 	metricConfig, ok := config.GetMetricConfig("disk")
 	if !ok || !metricConfig.Enabled {
-		return violations
+		return violations, nil
 	}
 
 	thresholds := metricConfig.Thresholds
@@ -128,8 +136,7 @@ func checkDiskThresholds(config *Config, stats *SystemStats) []ThresholdViolatio
 
 		percentage, err := strconv.ParseFloat(partition.Percentage, 64)
 		if err != nil {
-			log.Printf("Error parsing disk percentage: %v", err)
-			continue
+			return nil, fmt.Errorf("failed to parse disk usage for device %s: %w", partition.Device, err)
 		}
 
 		// Check critical first (higher severity)
@@ -154,7 +161,7 @@ func checkDiskThresholds(config *Config, stats *SystemStats) []ThresholdViolatio
 		}
 	}
 
-	return violations
+	return violations, nil
 }
 
 // checkCPUThresholds checks CPU usage against configured thresholds
@@ -266,7 +273,7 @@ func checkMemoryThresholds(config *Config, memUsed float64, memFree float64) []T
 }
 
 // applyThrottling applies throttling rules to violations
-func applyThrottling(config *Config, violations []ThresholdViolation, stateManager *StateManager) []ThresholdViolation {
+func applyThrottling(config *Config, violations []ThresholdViolation, stateManager *StateManager) ([]ThresholdViolation, error) {
 	var throttled []ThresholdViolation
 
 	for _, violation := range violations {
@@ -279,7 +286,11 @@ func applyThrottling(config *Config, violations []ThresholdViolation, stateManag
 		state := stateManager.GetOrCreate(violation.Metric, violation.Level)
 
 		// Check if we should alert
-		if state.ShouldAlert(minDuration, repeat, repeatInterval) {
+		shouldAlert, err := state.ShouldAlert(minDuration, repeat, repeatInterval)
+		if err != nil {
+			return nil, fmt.Errorf("throttle evaluation failed for %s/%s: %w", violation.Metric, violation.Level, err)
+		}
+		if shouldAlert {
 			throttled = append(throttled, violation)
 			state.MarkAlerted()
 			log.Printf("Throttle: %s/%s will alert (duration %.1fm >= %.1fm)",
@@ -290,11 +301,11 @@ func applyThrottling(config *Config, violations []ThresholdViolation, stateManag
 		}
 	}
 
-	return throttled
+	return throttled, nil
 }
 
 // clearResolvedViolations clears state for metrics that are no longer violating
-func clearResolvedViolations(currentViolations []ThresholdViolation, stateManager *StateManager) {
+func clearResolvedViolations(currentViolations []ThresholdViolation, stateManager *StateManager) error {
 	// Get currently violating metric/level combinations
 	currentKeys := make(map[string]bool)
 	for _, v := range currentViolations {
@@ -313,7 +324,11 @@ func clearResolvedViolations(currentViolations []ThresholdViolation, stateManage
 	// Clear non-violating states
 	for _, key := range keysToClear {
 		if state, ok := stateManager.States[key]; ok {
-			stateManager.Clear(state.Metric, state.Level)
+			if err := stateManager.Clear(state.Metric, state.Level); err != nil {
+				return fmt.Errorf("failed to clear state for %s/%s: %w", state.Metric, state.Level, err)
+			}
 		}
 	}
+
+	return nil
 }

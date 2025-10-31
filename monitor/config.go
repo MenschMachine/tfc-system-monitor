@@ -17,19 +17,19 @@ type Config struct {
 
 // ExcludeConfig represents exclusion settings for metrics (e.g., disk)
 type ExcludeConfig struct {
-	Devices     []string `yaml:"devices"`      // Device patterns to exclude (e.g., "/dev/loop*", "/dev/cd*")
+	Devices     []string `yaml:"devices"`     // Device patterns to exclude (e.g., "/dev/loop*", "/dev/cd*")
 	Filesystems []string `yaml:"filesystems"` // Filesystem types to exclude (e.g., "tmpfs", "devfs")
 	Mountpoints []string `yaml:"mountpoints"` // Mountpoint patterns to exclude (e.g., "/sys/*", "/proc/*")
 }
 
 // MetricConfig represents configuration for a single metric
 type MetricConfig struct {
-	Enabled    bool              `yaml:"enabled"`
+	Enabled    bool               `yaml:"enabled"`
 	Thresholds map[string]float64 `yaml:"thresholds"`
-	Throttle   ThrottleConfig    `yaml:"throttle"`
-	Mode       string            `yaml:"mode"` // for memory metric
-	Unit       string            `yaml:"unit"`
-	Exclude    ExcludeConfig     `yaml:"exclude"` // for disk metric
+	Throttle   ThrottleConfig     `yaml:"throttle"`
+	Mode       string             `yaml:"mode"` // for memory metric
+	Unit       string             `yaml:"unit"`
+	Exclude    ExcludeConfig      `yaml:"exclude"` // for disk metric
 }
 
 // ThrottleConfig represents throttle settings
@@ -107,7 +107,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// LoadConfig loads configuration from a YAML file, falling back to defaults
+// LoadConfig loads configuration from a YAML file
 func LoadConfig(configPath string) (*Config, error) {
 	log.Printf("Loading config from %s", configPath)
 
@@ -118,11 +118,13 @@ func LoadConfig(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("Config file %s not found, using defaults", configPath)
-			printDefaults()
-			return config, nil
+			err = fmt.Errorf("config file %s not found", configPath)
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+			return nil, err
 		}
-		return nil, fmt.Errorf("error reading config file: %w", err)
+		err = fmt.Errorf("error reading config file: %w", err)
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		return nil, err
 	}
 
 	// First, validate that the YAML only contains known fields
@@ -149,7 +151,6 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 
-	log.Println("Config loaded and validated successfully")
 	return config, nil
 }
 
@@ -472,48 +473,4 @@ func (c *Config) GetAlertActions(level string) []map[string]interface{} {
 		return alertLevel.Actions
 	}
 	return []map[string]interface{}{}
-}
-
-// printDefaults prints the default configuration to stderr
-func printDefaults() {
-	divider := "======================================================================"
-	fmt.Fprintf(os.Stderr, "\n%s\n", divider)
-	fmt.Fprintf(os.Stderr, "DEFAULT METRICS CONFIGURATION\n")
-	fmt.Fprintf(os.Stderr, "%s\n", divider)
-
-	defaultConfig := DefaultConfig()
-	for metricName, metricCfg := range defaultConfig.Metrics {
-		fmt.Fprintf(os.Stderr, "\n%s:\n", metricName)
-		fmt.Fprintf(os.Stderr, "  enabled: %v\n", metricCfg.Enabled)
-		fmt.Fprintf(os.Stderr, "  thresholds:\n")
-		for level, value := range metricCfg.Thresholds {
-			fmt.Fprintf(os.Stderr, "    %s: %v\n", level, value)
-		}
-		fmt.Fprintf(os.Stderr, "  throttle:\n")
-		fmt.Fprintf(os.Stderr, "    min_duration_minutes: %v\n", metricCfg.Throttle.MinDurationMinutes)
-		fmt.Fprintf(os.Stderr, "    repeat: %v\n", metricCfg.Throttle.Repeat)
-	}
-
-	fmt.Fprintf(os.Stderr, "\n%s\n", divider)
-	fmt.Fprintf(os.Stderr, "DEFAULT ALERT ACTIONS\n")
-	fmt.Fprintf(os.Stderr, "%s\n", divider)
-
-	for level, levelCfg := range defaultConfig.Alerts {
-		fmt.Fprintf(os.Stderr, "\n%s:\n", level)
-		for _, action := range levelCfg.Actions {
-			if actionType, ok := action["type"]; ok {
-				fmt.Fprintf(os.Stderr, "  - type: %v\n", actionType)
-				for key, value := range action {
-					if key != "type" {
-						fmt.Fprintf(os.Stderr, "    %s: %v\n", key, value)
-					}
-				}
-			}
-		}
-	}
-
-	fmt.Fprintf(os.Stderr, "\n%s\n", divider)
-	fmt.Fprintf(os.Stderr, "To override, create 'config.yaml' with your settings.\n")
-	fmt.Fprintf(os.Stderr, "See 'config-example.yaml' for a complete example.\n")
-	fmt.Fprintf(os.Stderr, "%s\n\n", divider)
 }

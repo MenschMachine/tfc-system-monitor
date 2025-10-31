@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -152,6 +153,10 @@ func run() error {
 		return fmt.Errorf("failed to parse flags: %w", err)
 	}
 
+	if flag.NArg() > 0 {
+		return fmt.Errorf("unexpected arguments: %s", strings.Join(flag.Args(), " "))
+	}
+
 	// Configure logging
 	if *debugMode {
 		log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -210,8 +215,14 @@ func runCLI() error {
 		return fmt.Errorf("failed to initialize recorder: %w", err)
 	}
 
-	stateManager := monitor.NewStateManager()
-	status := checkSystemStatus(config, stateManager, recorder)
+	stateManager, err := monitor.NewStateManager()
+	if err != nil {
+		return fmt.Errorf("failed to initialize state manager: %w", err)
+	}
+	status, err := checkSystemStatus(config, stateManager, recorder)
+	if err != nil {
+		return err
+	}
 
 	if *debugMode {
 		fmt.Println(status.ToJSON())
@@ -237,11 +248,19 @@ func runServer() error {
 		return fmt.Errorf("failed to initialize recorder: %w", err)
 	}
 
-	stateManager := monitor.NewStateManager()
+	stateManager, err := monitor.NewStateManager()
+	if err != nil {
+		return fmt.Errorf("failed to initialize state manager: %w", err)
+	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("GET %s from %s", r.RequestURI, r.RemoteAddr)
-		status := checkSystemStatus(config, stateManager, recorder)
+		status, err := checkSystemStatus(config, stateManager, recorder)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+			http.Error(w, `{"status":"ERROR","info":["internal server error"]}`, http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(status.ToJSON()))
@@ -279,25 +298,27 @@ func runServer() error {
 }
 
 // checkSystemStatus checks system status and returns a Status object
-func checkSystemStatus(config *monitor.Config, stateManager *monitor.StateManager, recorder *monitor.Recorder) *Status {
+func checkSystemStatus(config *monitor.Config, stateManager *monitor.StateManager, recorder *monitor.Recorder) (*Status, error) {
 	status := &Status{Status: "OK", Info: []string{}}
 
 	// Get system statistics
 	stats, err := monitor.GetSystemStats()
 	if err != nil {
-		status.AddCritical("system", fmt.Sprintf("Failed to get system stats: %v", err))
-		return status
+		return nil, fmt.Errorf("failed to get system stats: %w", err)
 	}
 
 	// Record metrics to RRD
 	if recorder != nil {
 		if err := recorder.Record(stats); err != nil {
-			log.Printf("Error recording metrics: %v", err)
+			return nil, fmt.Errorf("failed to record metrics: %w", err)
 		}
 	}
 
 	// Check thresholds
-	warningViolations, criticalViolations := monitor.CheckAllThresholds(config, stats, stateManager)
+	warningViolations, criticalViolations, err := monitor.CheckAllThresholds(config, stats, stateManager)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate thresholds: %w", err)
+	}
 
 	// Add violations to status
 	for _, violation := range criticalViolations {
@@ -309,7 +330,9 @@ func checkSystemStatus(config *monitor.Config, stateManager *monitor.StateManage
 	}
 
 	// Process violations (alerts)
-	monitor.ProcessViolations(config, warningViolations, criticalViolations)
+	if err := monitor.ProcessViolations(config, warningViolations, criticalViolations); err != nil {
+		return nil, fmt.Errorf("failed to process violations: %w", err)
+	}
 
-	return status
+	return status, nil
 }

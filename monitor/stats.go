@@ -2,7 +2,6 @@ package monitor
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -29,13 +28,13 @@ type BootTime struct {
 
 // CPUInfo contains CPU metrics
 type CPUInfo struct {
-	PhysicalCores   int32              `json:"physical_cores"`
-	TotalCores      int32              `json:"total_cores"`
-	MaxFrequency    string             `json:"max_frequency"`
-	MinFrequency    string             `json:"min_frequency"`
-	CurrentFrequency string             `json:"current_frequency"`
-	CPUUsagePerCore map[string]string  `json:"cpu_usage_per_core"`
-	TotalCPUUsage   string             `json:"total_cpu_usage"`
+	PhysicalCores    int32             `json:"physical_cores"`
+	TotalCores       int32             `json:"total_cores"`
+	MaxFrequency     string            `json:"max_frequency"`
+	MinFrequency     string            `json:"min_frequency"`
+	CurrentFrequency string            `json:"current_frequency"`
+	CPUUsagePerCore  map[string]string `json:"cpu_usage_per_core"`
+	TotalCPUUsage    string            `json:"total_cpu_usage"`
 }
 
 // MemoryInfo contains memory metrics
@@ -87,32 +86,32 @@ func GetSystemStats() (*SystemStats, error) {
 	stats := &SystemStats{}
 
 	// Get boot time
-	if bootInfo, err := getBootTime(); err == nil {
-		stats.BootTime = bootInfo
-	} else {
-		log.Printf("Error getting boot time: %v", err)
+	bootInfo, err := getBootTime()
+	if err != nil {
+		return nil, fmt.Errorf("error getting boot time: %w", err)
 	}
+	stats.BootTime = bootInfo
 
 	// Get CPU info
-	if cpuInfo, err := getCPUInfo(); err == nil {
-		stats.CPUInfo = cpuInfo
-	} else {
+	cpuInfo, err := getCPUInfo()
+	if err != nil {
 		return nil, fmt.Errorf("error getting CPU info: %w", err)
 	}
+	stats.CPUInfo = cpuInfo
 
 	// Get memory info
-	if memInfo, err := getMemoryInfo(); err == nil {
-		stats.MemoryInfo = memInfo
-	} else {
+	memInfo, err := getMemoryInfo()
+	if err != nil {
 		return nil, fmt.Errorf("error getting memory info: %w", err)
 	}
+	stats.MemoryInfo = memInfo
 
 	// Get disk info
-	if diskInfo, err := getDiskInfo(); err == nil {
-		stats.DiskInfo = diskInfo
-	} else {
+	diskInfo, err := getDiskInfo()
+	if err != nil {
 		return nil, fmt.Errorf("error getting disk info: %w", err)
 	}
+	stats.DiskInfo = diskInfo
 
 	return stats, nil
 }
@@ -240,8 +239,7 @@ func getDiskInfo() (DiskInfo, error) {
 
 		usage, err := disk.Usage(partition.Mountpoint)
 		if err != nil {
-			log.Printf("Error getting disk usage for %s: %v", partition.Mountpoint, err)
-			continue
+			return diskInfo, fmt.Errorf("error getting disk usage for %s: %w", partition.Mountpoint, err)
 		}
 
 		diskInfo.Partitions = append(diskInfo.Partitions, PartitionInfo{
@@ -257,9 +255,12 @@ func getDiskInfo() (DiskInfo, error) {
 
 	// Get disk IO stats
 	ioCounters, err := disk.IOCounters()
-	if err == nil && len(ioCounters) > 0 {
-		totalRead := uint64(0)
-		totalWrite := uint64(0)
+	if err != nil {
+		return diskInfo, fmt.Errorf("error getting disk IO counters: %w", err)
+	}
+	if len(ioCounters) > 0 {
+		var totalRead uint64
+		var totalWrite uint64
 		for _, counter := range ioCounters {
 			totalRead += counter.ReadBytes
 			totalWrite += counter.WriteBytes

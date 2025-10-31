@@ -80,7 +80,7 @@ var priorityMap = map[string]syslog.Priority{
 // NewSyslogAction creates a new syslog alert action
 func NewSyslogAction(config map[string]interface{}) (*SyslogAction, error) {
 	sa := &SyslogAction{
-		Tag:      "tfc-monitor",
+		Tag:      "tfc-system-monitor",
 		Facility: syslog.LOG_LOCAL0,
 		Priority: syslog.LOG_WARNING,
 	}
@@ -296,7 +296,7 @@ func CreateAction(config map[string]interface{}) (AlertAction, error) {
 }
 
 // ProcessViolations executes configured alert actions for violations
-func ProcessViolations(config *Config, warningViolations []ThresholdViolation, criticalViolations []ThresholdViolation) {
+func ProcessViolations(config *Config, warningViolations []ThresholdViolation, criticalViolations []ThresholdViolation) error {
 	// Process critical violations
 	if len(criticalViolations) > 0 {
 		log.Printf("Processing %d critical violations", len(criticalViolations))
@@ -304,12 +304,11 @@ func ProcessViolations(config *Config, warningViolations []ThresholdViolation, c
 		for _, actionConfig := range criticalActions {
 			action, err := CreateAction(actionConfig)
 			if err != nil {
-				log.Printf("Failed to create alert action: %v", err)
-				continue
+				return fmt.Errorf("failed to create critical alert action: %w", err)
 			}
 			for _, violation := range criticalViolations {
 				if err := action.Execute(violation); err != nil {
-					log.Printf("Failed to execute alert: %v", err)
+					return fmt.Errorf("failed to execute critical alert: %w", err)
 				}
 			}
 		}
@@ -322,14 +321,15 @@ func ProcessViolations(config *Config, warningViolations []ThresholdViolation, c
 		for _, actionConfig := range warningActions {
 			action, err := CreateAction(actionConfig)
 			if err != nil {
-				log.Printf("Failed to create alert action: %v", err)
-				continue
+				return fmt.Errorf("failed to create warning alert action: %w", err)
 			}
 			for _, violation := range warningViolations {
 				if err := action.Execute(violation); err != nil {
-					log.Printf("Failed to execute alert: %v", err)
+					return fmt.Errorf("failed to execute warning alert: %w", err)
 				}
 			}
 		}
 	}
+
+	return nil
 }

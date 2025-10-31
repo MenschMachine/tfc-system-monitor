@@ -87,31 +87,28 @@ func (r *Recorder) Record(stats *SystemStats) error {
 	// Record CPU usage
 	cpuUsage, err := strconv.ParseFloat(stats.CPUInfo.TotalCPUUsage, 64)
 	if err != nil {
-		log.Printf("Error parsing CPU usage: %v", err)
-	} else {
-		if err := r.recordMetric("cpu", cpuUsage, timestamp); err != nil {
-			log.Printf("Error recording CPU metric: %v", err)
-		}
+		return fmt.Errorf("failed to parse CPU usage: %w", err)
+	}
+	if err := r.recordMetric("cpu", cpuUsage, timestamp); err != nil {
+		return fmt.Errorf("failed to record cpu metric: %w", err)
 	}
 
 	// Record memory usage (percentage used)
 	memUsed, err := strconv.ParseFloat(stats.MemoryInfo.VirtualMemory.Percentage, 64)
 	if err != nil {
-		log.Printf("Error parsing memory usage: %v", err)
-	} else {
-		if err := r.recordMetric("memory", memUsed, timestamp); err != nil {
-			log.Printf("Error recording memory metric: %v", err)
-		}
+		return fmt.Errorf("failed to parse memory usage: %w", err)
+	}
+	if err := r.recordMetric("memory", memUsed, timestamp); err != nil {
+		return fmt.Errorf("failed to record memory metric: %w", err)
 	}
 
 	// Record swap usage (percentage used)
 	swapUsed, err := strconv.ParseFloat(stats.MemoryInfo.SwapMemory.Percentage, 64)
 	if err != nil {
-		log.Printf("Error parsing swap usage: %v", err)
-	} else {
-		if err := r.recordMetric("swap", swapUsed, timestamp); err != nil {
-			log.Printf("Error recording swap metric: %v", err)
-		}
+		return fmt.Errorf("failed to parse swap usage: %w", err)
+	}
+	if err := r.recordMetric("swap", swapUsed, timestamp); err != nil {
+		return fmt.Errorf("failed to record swap metric: %w", err)
 	}
 
 	log.Printf("Metrics recorded at timestamp %d", timestamp)
