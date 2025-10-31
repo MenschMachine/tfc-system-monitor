@@ -12,6 +12,7 @@ import (
 type Config struct {
 	Metrics map[string]MetricConfig `yaml:"metrics"`
 	Alerts  map[string]AlertLevel   `yaml:"alerts"`
+	RRDPath string                  `yaml:"rrd_path"`
 }
 
 // ExcludeConfig represents exclusion settings for metrics (e.g., disk)
@@ -167,8 +168,8 @@ func validateYAMLStructure(data []byte) error {
 		return fmt.Errorf("config must be a YAML map")
 	}
 
-	// Top-level keys should only be "metrics" and "alerts"
-	allowedTopLevel := map[string]bool{"metrics": true, "alerts": true}
+	// Top-level keys should only be "metrics", "alerts", and "rrd_path"
+	allowedTopLevel := map[string]bool{"metrics": true, "alerts": true, "rrd_path": true}
 	for key := range rawMap {
 		keyStr, ok := keyToString(key)
 		if !ok {
@@ -323,6 +324,7 @@ func deepMergeConfig(defaults, overrides *Config) *Config {
 	result := &Config{
 		Metrics: make(map[string]MetricConfig),
 		Alerts:  make(map[string]AlertLevel),
+		RRDPath: defaults.RRDPath,
 	}
 
 	// Copy defaults
@@ -340,6 +342,10 @@ func deepMergeConfig(defaults, overrides *Config) *Config {
 		}
 		for k, v := range overrides.Alerts {
 			result.Alerts[k] = v
+		}
+		// Override rrd_path if provided in config
+		if overrides.RRDPath != "" {
+			result.RRDPath = overrides.RRDPath
 		}
 	}
 
@@ -463,46 +469,46 @@ func (c *Config) GetAlertActions(level string) []map[string]interface{} {
 	return []map[string]interface{}{}
 }
 
-// printDefaults prints the default configuration
+// printDefaults prints the default configuration to stderr
 func printDefaults() {
 	divider := "======================================================================"
-	fmt.Println("\n" + divider)
-	fmt.Println("DEFAULT METRICS CONFIGURATION")
-	fmt.Println(divider)
+	fmt.Fprintf(os.Stderr, "\n%s\n", divider)
+	fmt.Fprintf(os.Stderr, "DEFAULT METRICS CONFIGURATION\n")
+	fmt.Fprintf(os.Stderr, "%s\n", divider)
 
 	defaultConfig := DefaultConfig()
 	for metricName, metricCfg := range defaultConfig.Metrics {
-		fmt.Printf("\n%s:\n", metricName)
-		fmt.Printf("  enabled: %v\n", metricCfg.Enabled)
-		fmt.Println("  thresholds:")
+		fmt.Fprintf(os.Stderr, "\n%s:\n", metricName)
+		fmt.Fprintf(os.Stderr, "  enabled: %v\n", metricCfg.Enabled)
+		fmt.Fprintf(os.Stderr, "  thresholds:\n")
 		for level, value := range metricCfg.Thresholds {
-			fmt.Printf("    %s: %v\n", level, value)
+			fmt.Fprintf(os.Stderr, "    %s: %v\n", level, value)
 		}
-		fmt.Println("  throttle:")
-		fmt.Printf("    min_duration_minutes: %v\n", metricCfg.Throttle.MinDurationMinutes)
-		fmt.Printf("    repeat: %v\n", metricCfg.Throttle.Repeat)
+		fmt.Fprintf(os.Stderr, "  throttle:\n")
+		fmt.Fprintf(os.Stderr, "    min_duration_minutes: %v\n", metricCfg.Throttle.MinDurationMinutes)
+		fmt.Fprintf(os.Stderr, "    repeat: %v\n", metricCfg.Throttle.Repeat)
 	}
 
-	fmt.Println("\n" + divider)
-	fmt.Println("DEFAULT ALERT ACTIONS")
-	fmt.Println(divider)
+	fmt.Fprintf(os.Stderr, "\n%s\n", divider)
+	fmt.Fprintf(os.Stderr, "DEFAULT ALERT ACTIONS\n")
+	fmt.Fprintf(os.Stderr, "%s\n", divider)
 
 	for level, levelCfg := range defaultConfig.Alerts {
-		fmt.Printf("\n%s:\n", level)
+		fmt.Fprintf(os.Stderr, "\n%s:\n", level)
 		for _, action := range levelCfg.Actions {
 			if actionType, ok := action["type"]; ok {
-				fmt.Printf("  - type: %v\n", actionType)
+				fmt.Fprintf(os.Stderr, "  - type: %v\n", actionType)
 				for key, value := range action {
 					if key != "type" {
-						fmt.Printf("    %s: %v\n", key, value)
+						fmt.Fprintf(os.Stderr, "    %s: %v\n", key, value)
 					}
 				}
 			}
 		}
 	}
 
-	fmt.Println("\n" + divider)
-	fmt.Println("To override, create 'config.yaml' with your settings.")
-	fmt.Println("See 'config-example.yaml' for a complete example.")
-	fmt.Println(divider + "\n")
+	fmt.Fprintf(os.Stderr, "\n%s\n", divider)
+	fmt.Fprintf(os.Stderr, "To override, create 'config.yaml' with your settings.\n")
+	fmt.Fprintf(os.Stderr, "See 'config-example.yaml' for a complete example.\n")
+	fmt.Fprintf(os.Stderr, "%s\n\n", divider)
 }

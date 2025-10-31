@@ -85,6 +85,7 @@ FLAGS:
   -rrd-path string
       Path to RRD (Round-Robin Database) data directory (default: "./rrd-data")
       Where historical metrics are stored. Directory will be created if it doesn't exist.
+      Can also be set in config file via 'rrd_path' key. Flag overrides config file.
 
   -h, -help
       Show this help message
@@ -166,12 +167,20 @@ func main() {
 func runReport() {
 	config, err := monitor.LoadConfig(*configPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
+		os.Exit(1)
 	}
 
-	reporter := monitor.NewReporter(*rrdPath, config, fmt.Sprintf("./reports/report-%s.html", time.Now().Format("2006-01-02")))
+	// Use --rrd-path flag if provided, otherwise use config value
+	rrdPathToUse := *rrdPath
+	if config.RRDPath != "" && *rrdPath == "./rrd-data" {
+		rrdPathToUse = config.RRDPath
+	}
+
+	reporter := monitor.NewReporter(rrdPathToUse, config, fmt.Sprintf("./reports/report-%s.html", time.Now().Format("2006-01-02")))
 	if err := reporter.Generate(); err != nil {
-		log.Fatalf("Failed to generate report: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to generate report: %v\n", err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("Report generated successfully: %s\n", reporter.OutputPath)
@@ -181,12 +190,20 @@ func runReport() {
 func runCLI() {
 	config, err := monitor.LoadConfig(*configPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
+		os.Exit(1)
 	}
 
-	recorder := monitor.NewRecorder(*rrdPath)
+	// Use --rrd-path flag if provided, otherwise use config value
+	rrdPathToUse := *rrdPath
+	if config.RRDPath != "" && *rrdPath == "./rrd-data" {
+		rrdPathToUse = config.RRDPath
+	}
+
+	recorder := monitor.NewRecorder(rrdPathToUse)
 	if err := recorder.Initialize(); err != nil {
-		log.Fatalf("Failed to initialize recorder: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to initialize recorder: %v\n", err)
+		os.Exit(1)
 	}
 
 	stateManager := monitor.NewStateManager()
@@ -201,12 +218,20 @@ func runCLI() {
 func runServer() {
 	config, err := monitor.LoadConfig(*configPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
+		os.Exit(1)
 	}
 
-	recorder := monitor.NewRecorder(*rrdPath)
+	// Use --rrd-path flag if provided, otherwise use config value
+	rrdPathToUse := *rrdPath
+	if config.RRDPath != "" && *rrdPath == "./rrd-data" {
+		rrdPathToUse = config.RRDPath
+	}
+
+	recorder := monitor.NewRecorder(rrdPathToUse)
 	if err := recorder.Initialize(); err != nil {
-		log.Fatalf("Failed to initialize recorder: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to initialize recorder: %v\n", err)
+		os.Exit(1)
 	}
 
 	stateManager := monitor.NewStateManager()
@@ -243,7 +268,8 @@ func runServer() {
 	}()
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Server error: %v", err)
+		fmt.Fprintf(os.Stderr, "Error: Server error: %v\n", err)
+		os.Exit(1)
 	}
 
 	log.Println("Server stopped")

@@ -1,6 +1,11 @@
 # TFC System Monitor - Example Configuration
 # This file shows all available configuration options
 
+# RRD data path (optional)
+# Where historical metrics are stored. Overrides the --rrd-path command line flag.
+# Default: ./rrd-data
+rrd_path: /var/lib/tfc-monitor/rrd-data
+
 # Metrics configuration
 metrics:
   # Disk usage monitoring
