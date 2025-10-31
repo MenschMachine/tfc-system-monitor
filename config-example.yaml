@@ -1,0 +1,89 @@
+# TFC System Monitor - Example Configuration
+# This file shows all available configuration options
+
+# Metrics configuration
+metrics:
+  # Disk usage monitoring
+  disk:
+    enabled: true
+    thresholds:
+      warning: 80      # Alert when partition is 80% full
+      critical: 90     # Critical alert when partition is 90% full
+    throttle:
+      min_duration_minutes: 0    # Alert immediately
+      repeat: false              # Only alert once per violation
+    unit: percentage
+
+  # CPU usage monitoring
+  cpu:
+    enabled: true
+    thresholds:
+      warning: 70      # Alert when CPU usage exceeds 70%
+      critical: 90     # Critical alert when CPU usage exceeds 90%
+    throttle:
+      min_duration_minutes: 0    # Alert immediately
+      repeat: false              # Only alert once per violation
+    unit: percentage
+
+  # Memory usage monitoring
+  memory:
+    enabled: true
+    thresholds:
+      warning: 20      # Alert when free memory drops below 20%
+      critical: 5      # Critical alert when free memory drops below 5%
+    throttle:
+      min_duration_minutes: 0    # Alert immediately
+      repeat: false              # Only alert once per violation
+    mode: min_free     # Track minimum free memory (alternative: max_used)
+    unit: percentage
+
+# Alert configuration
+alerts:
+  warning:
+    actions:
+      # Log to system logger
+      - type: logger
+        level: warning
+
+      # Send to syslog
+      - type: syslog
+        tag: tfc-monitor
+        facility: local0
+        priority: warning
+
+      # Send webhook
+      - type: webhook
+        url: https://example.com/alerts
+        timeout: 5
+        retry: 1
+
+      # Execute script
+      - type: script
+        path: /usr/local/bin/alert-warning.sh
+        args: []
+        timeout: 30
+
+  critical:
+    actions:
+      # Log to system logger
+      - type: logger
+        level: critical
+
+      # Send to syslog with higher priority
+      - type: syslog
+        tag: tfc-monitor
+        facility: local0
+        priority: critical
+
+      # Send webhook
+      - type: webhook
+        url: https://example.com/critical-alerts
+        timeout: 5
+        retry: 3
+
+      # Execute script
+      - type: script
+        path: /usr/local/bin/alert-critical.sh
+        args:
+          - "--notify-on-call"
+        timeout: 30
