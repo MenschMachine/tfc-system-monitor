@@ -23,6 +23,7 @@ metrics:
     throttle:
       min_duration_minutes: 0    # Alert immediately
       repeat: false              # Only alert once per violation
+      repeat_interval: ""        # Interval between repeated alerts (e.g., "1h", "30m", "10s") - requires repeat: true
     unit: percentage
 
   # Memory usage monitoring

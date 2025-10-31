@@ -227,12 +227,13 @@ func applyThrottling(config *Config, violations []ThresholdViolation, stateManag
 		throttleConfig := config.GetThrottleConfig(violation.Metric)
 		minDuration := throttleConfig.MinDurationMinutes
 		repeat := throttleConfig.Repeat
+		repeatInterval := throttleConfig.RepeatInterval
 
 		// Get or create state
 		state := stateManager.GetOrCreate(violation.Metric, violation.Level)
 
 		// Check if we should alert
-		if state.ShouldAlert(minDuration, repeat) {
+		if state.ShouldAlert(minDuration, repeat, repeatInterval) {
 			throttled = append(throttled, violation)
 			state.MarkAlerted()
 			log.Printf("Throttle: %s/%s will alert (duration %.1fm >= %.1fm)",

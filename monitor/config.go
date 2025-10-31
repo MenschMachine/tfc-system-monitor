@@ -27,6 +27,7 @@ type MetricConfig struct {
 type ThrottleConfig struct {
 	MinDurationMinutes float64 `yaml:"min_duration_minutes"`
 	Repeat             bool    `yaml:"repeat"`
+	RepeatInterval     string  `yaml:"repeat_interval"`
 }
 
 // AlertLevel represents alert configuration for a severity level

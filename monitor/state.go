@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+// parseDuration parses duration strings like "1h", "30m", "10s"
+func parseDuration(s string) time.Duration {
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		log.Printf("Failed to parse duration '%s': %v, defaulting to 0", s, err)
+		return 0
+	}
+	return d
+}
+
 const StateFile = "/tmp/tfc-monitor-state.json"
 
 // ViolationState tracks state of a single metric violation
@@ -131,7 +141,7 @@ func (vs *ViolationState) DurationMinutes() float64 {
 }
 
 // ShouldAlert determines if we should alert based on throttle settings
-func (vs *ViolationState) ShouldAlert(minDurationMinutes float64, repeat bool) bool {
+func (vs *ViolationState) ShouldAlert(minDurationMinutes float64, repeat bool, repeatInterval string) bool {
 	duration := vs.DurationMinutes()
 
 	// Not enough time has passed
@@ -141,11 +151,27 @@ func (vs *ViolationState) ShouldAlert(minDurationMinutes float64, repeat bool) b
 		return false
 	}
 
-	// Already alerted and not repeating
-	if vs.HasAlerted && !repeat {
-		log.Printf("Throttle: %s/%s already alerted and repeat=false, skipping",
-			vs.Metric, vs.Level)
-		return false
+	// Already alerted
+	if vs.HasAlerted {
+		// If repeat is disabled, skip
+		if !repeat {
+			log.Printf("Throttle: %s/%s already alerted and repeat=false, skipping",
+				vs.Metric, vs.Level)
+			return false
+		}
+
+		// If repeat is enabled, check repeat_interval
+		if repeatInterval != "" {
+			interval := parseDuration(repeatInterval)
+			if interval > 0 && vs.LastAlertTime != nil {
+				timeSinceLastAlert := time.Since(time.Unix(int64(*vs.LastAlertTime), 0))
+				if timeSinceLastAlert < interval {
+					log.Printf("Throttle: %s/%s repeat_interval not elapsed (%.1fs < %v), skipping",
+						vs.Metric, vs.Level, timeSinceLastAlert.Seconds(), interval)
+					return false
+				}
+			}
+		}
 	}
 
 	// Allow alert
