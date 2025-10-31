@@ -124,6 +124,11 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("error reading config file: %w", err)
 	}
 
+	// First, validate that the YAML only contains known fields
+	if err := validateYAMLStructure(data); err != nil {
+		return nil, err
+	}
+
 	// Parse user config
 	userConfig := &Config{}
 	if err := yaml.Unmarshal(data, userConfig); err != nil {
@@ -140,6 +145,177 @@ func LoadConfig(configPath string) (*Config, error) {
 
 	log.Println("Config loaded and validated successfully")
 	return config, nil
+}
+
+// keyToString converts an interface{} key to string for validation
+func keyToString(key interface{}) (string, bool) {
+	if str, ok := key.(string); ok {
+		return str, true
+	}
+	return "", false
+}
+
+// validateYAMLStructure validates that the YAML config only contains known fields
+func validateYAMLStructure(data []byte) error {
+	var raw interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("error parsing config file: %w", err)
+	}
+
+	rawMap, ok := raw.(map[interface{}]interface{})
+	if !ok {
+		return fmt.Errorf("config must be a YAML map")
+	}
+
+	// Top-level keys should only be "metrics" and "alerts"
+	allowedTopLevel := map[string]bool{"metrics": true, "alerts": true}
+	for key := range rawMap {
+		keyStr, ok := keyToString(key)
+		if !ok {
+			return fmt.Errorf("top-level keys must be strings")
+		}
+		if !allowedTopLevel[keyStr] {
+			return fmt.Errorf("unknown top-level config field: '%s'", keyStr)
+		}
+	}
+
+	// Validate metrics section
+	if metricsVal, ok := rawMap["metrics"]; ok {
+		metricsRaw, ok := metricsVal.(map[interface{}]interface{})
+		if !ok {
+			return fmt.Errorf("metrics must be a map")
+		}
+
+		allowedMetricNames := map[string]bool{"disk": true, "cpu": true, "memory": true}
+		for metricName, metricRaw := range metricsRaw {
+			metricNameStr, ok := keyToString(metricName)
+			if !ok {
+				return fmt.Errorf("metric names must be strings")
+			}
+			if !allowedMetricNames[metricNameStr] {
+				return fmt.Errorf("unknown metric: '%s'", metricNameStr)
+			}
+
+			metricConfig, ok := metricRaw.(map[interface{}]interface{})
+			if !ok {
+				return fmt.Errorf("metric '%s' configuration must be a map", metricNameStr)
+			}
+
+			allowedMetricFields := map[string]bool{
+				"enabled": true, "thresholds": true, "throttle": true,
+				"mode": true, "unit": true, "exclude": true,
+			}
+			for fieldKey := range metricConfig {
+				fieldName, ok := keyToString(fieldKey)
+				if !ok {
+					continue
+				}
+				if !allowedMetricFields[fieldName] {
+					return fmt.Errorf("unknown field '%s' in metric '%s'", fieldName, metricNameStr)
+				}
+			}
+
+			// Validate throttle fields
+			if throttleVal, ok := metricConfig["throttle"]; ok {
+				if throttleRaw, ok := throttleVal.(map[interface{}]interface{}); ok {
+					allowedThrottleFields := map[string]bool{
+						"min_duration_minutes": true, "repeat": true, "repeat_interval": true,
+					}
+					for fieldKey := range throttleRaw {
+						fieldName, ok := keyToString(fieldKey)
+						if !ok {
+							continue
+						}
+						if !allowedThrottleFields[fieldName] {
+							return fmt.Errorf("unknown field '%s' in throttle config of metric '%s'", fieldName, metricNameStr)
+						}
+					}
+				}
+			}
+
+			// Validate exclude fields
+			if excludeVal, ok := metricConfig["exclude"]; ok {
+				if excludeRaw, ok := excludeVal.(map[interface{}]interface{}); ok {
+					allowedExcludeFields := map[string]bool{
+						"devices": true, "filesystems": true, "mountpoints": true,
+					}
+					for fieldKey := range excludeRaw {
+						fieldName, ok := keyToString(fieldKey)
+						if !ok {
+							continue
+						}
+						if !allowedExcludeFields[fieldName] {
+							return fmt.Errorf("unknown field '%s' in exclude config of metric '%s'", fieldName, metricNameStr)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Validate alerts section
+	if alertsVal, ok := rawMap["alerts"]; ok {
+		alertsRaw, ok := alertsVal.(map[interface{}]interface{})
+		if !ok {
+			return fmt.Errorf("alerts must be a map")
+		}
+
+		allowedAlertLevels := map[string]bool{"warning": true, "critical": true}
+		for levelKey, levelRaw := range alertsRaw {
+			levelName, ok := keyToString(levelKey)
+			if !ok {
+				return fmt.Errorf("alert level names must be strings")
+			}
+			if !allowedAlertLevels[levelName] {
+				return fmt.Errorf("unknown alert level: '%s'", levelName)
+			}
+
+			alertLevel, ok := levelRaw.(map[interface{}]interface{})
+			if !ok {
+				return fmt.Errorf("alert level '%s' configuration must be a map", levelName)
+			}
+
+			allowedLevelFields := map[string]bool{"actions": true}
+			for fieldKey := range alertLevel {
+				fieldName, ok := keyToString(fieldKey)
+				if !ok {
+					continue
+				}
+				if !allowedLevelFields[fieldName] {
+					return fmt.Errorf("unknown field '%s' in alert level '%s'", fieldName, levelName)
+				}
+			}
+
+			// Validate alert actions
+			if actionsVal, ok := alertLevel["actions"]; ok {
+				if actionsRaw, ok := actionsVal.([]interface{}); ok {
+					for i, actionRaw := range actionsRaw {
+						action, ok := actionRaw.(map[interface{}]interface{})
+						if !ok {
+							continue
+						}
+
+						allowedActionFields := map[string]bool{
+							"type": true, "level": true, "tag": true, "facility": true,
+							"priority": true, "url": true, "timeout": true, "retry": true,
+							"path": true, "args": true,
+						}
+						for fieldKey := range action {
+							fieldName, ok := keyToString(fieldKey)
+							if !ok {
+								continue
+							}
+							if !allowedActionFields[fieldName] {
+								return fmt.Errorf("unknown field '%s' in alert action %d of level '%s'", fieldName, i, levelName)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // deepMergeConfig merges user config with defaults
