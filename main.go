@@ -132,15 +132,24 @@ EXAMPLES:
 }
 
 func main() {
-	flag.Usage = printHelp
-	flag.Parse()
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
 
-	// Handle explicit -help or -h
-	if flag.NFlag() == 0 && len(os.Args) == 1 {
-		// No args provided, run normally
-	} else if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "-help" || os.Args[1] == "--help") {
-		printHelp()
-		os.Exit(0)
+func run() error {
+	flag.Usage = printHelp
+
+	for _, arg := range os.Args[1:] {
+		if arg == "-h" || arg == "-help" || arg == "--help" {
+			printHelp()
+			return nil
+		}
+	}
+
+	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+		return fmt.Errorf("failed to parse flags: %w", err)
 	}
 
 	// Configure logging
@@ -151,24 +160,21 @@ func main() {
 		log.SetOutput(io.Discard)
 	}
 
-	if *reportMode {
-		// Run in report mode
-		runReport()
-	} else if *cliMode {
-		// Run in CLI mode
-		runCLI()
-	} else {
-		// Run in server mode
-		runServer()
+	switch {
+	case *reportMode:
+		return runReport()
+	case *cliMode:
+		return runCLI()
+	default:
+		return runServer()
 	}
 }
 
 // runReport generates a report from RRD data and exits
-func runReport() {
+func runReport() error {
 	config, err := monitor.LoadConfig(*configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// Use --rrd-path flag if provided, otherwise use config value
@@ -179,19 +185,18 @@ func runReport() {
 
 	reporter := monitor.NewReporter(rrdPathToUse, config, fmt.Sprintf("./reports/report-%s.html", time.Now().Format("2006-01-02")))
 	if err := reporter.Generate(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to generate report: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to generate report: %w", err)
 	}
 
 	fmt.Printf("Report generated successfully: %s\n", reporter.OutputPath)
+	return nil
 }
 
 // runCLI runs the monitor in command-line mode
-func runCLI() {
+func runCLI() error {
 	config, err := monitor.LoadConfig(*configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// Use --rrd-path flag if provided, otherwise use config value
@@ -202,8 +207,7 @@ func runCLI() {
 
 	recorder := monitor.NewRecorder(rrdPathToUse)
 	if err := recorder.Initialize(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to initialize recorder: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to initialize recorder: %w", err)
 	}
 
 	stateManager := monitor.NewStateManager()
@@ -212,14 +216,14 @@ func runCLI() {
 	if *debugMode {
 		fmt.Println(status.ToJSON())
 	}
+	return nil
 }
 
 // runServer runs the monitor as an HTTP server
-func runServer() {
+func runServer() error {
 	config, err := monitor.LoadConfig(*configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to load config: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	// Use --rrd-path flag if provided, otherwise use config value
@@ -230,8 +234,7 @@ func runServer() {
 
 	recorder := monitor.NewRecorder(rrdPathToUse)
 	if err := recorder.Initialize(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Failed to initialize recorder: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to initialize recorder: %w", err)
 	}
 
 	stateManager := monitor.NewStateManager()
@@ -268,11 +271,11 @@ func runServer() {
 	}()
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		fmt.Fprintf(os.Stderr, "Error: Server error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("server error: %w", err)
 	}
 
 	log.Println("Server stopped")
+	return nil
 }
 
 // checkSystemStatus checks system status and returns a Status object
