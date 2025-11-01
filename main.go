@@ -52,7 +52,11 @@ var (
 	port       = flag.Int("port", 12349, "")
 	reportMode = flag.Bool("report", false, "")
 	rrdPath    = flag.String("rrd-path", "./rrd-data", "")
+	versionFlag = flag.Bool("version", false, "")
 )
+
+// Set at build time with -ldflags
+var Version = "dev"
 
 func printHelp() {
 	fmt.Fprintf(flag.CommandLine.Output(), `TFC System Monitor - Monitor system resources and generate alerts
@@ -145,6 +149,10 @@ func run() error {
 	for _, arg := range os.Args[1:] {
 		if arg == "-h" || arg == "-help" || arg == "--help" {
 			printHelp()
+			return nil
+		}
+		if arg == "-version" || arg == "--version" {
+			fmt.Println(Version)
 			return nil
 		}
 	}

@@ -39,7 +39,8 @@ install-deps:
 
 build: install-deps
 	@echo "Building tfc-system-monitor..."
-	go build -o tfc-system-monitor .
+	@COMMIT_HASH=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	go build -ldflags "-X main.Version=$$COMMIT_HASH" -o tfc-system-monitor .
 	@echo "Build complete: ./tfc-system-monitor"
 
 run: build
