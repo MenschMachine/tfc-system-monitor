@@ -63,7 +63,7 @@ clean:
 	@echo "Cleaning up..."
 	rm -f tfc-system-monitor
 	go clean
-	rm -f coverage.out coverage.html
+	rm -rf coverage.out coverage.html logs rrd-data reports
 	@echo "Clean complete"
 
 test:
