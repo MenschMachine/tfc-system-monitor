@@ -1,5 +1,7 @@
 .PHONY: install-deps build clean help test test-verbose test-coverage test-short test-race
 
+export GOPATH := $(HOME)/.go
+
 help:
 	@echo "TFC System Monitor - Makefile targets:"
 	@echo ""
